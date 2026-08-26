@@ -33,7 +33,7 @@
     THIS SOFTWARE.
 */
 #include "mcc_generated_files/system/system.h"
-#include "mcc_generated_files/timer/tmr0.h"
+#include "Seg_driver.h"
 
 uint8_t charcase=0;		//预留/暂存单元(本程序未使用)
 uint8_t p[4]={0};           //数码管4位显示的值(0~9 数字, 10~35 字母 A~Z)
@@ -43,63 +43,22 @@ uint8_t i=0;
 uint8_t key_data=0;     //保存按下时 PORTC 低 4 位数据(供状态机比较)
 uint8_t key_cnt=0;      //按键状态机通用计数(进入各状态清零)
 uint8_t key_state=0;    //按键状态机状态(bit0-2=0~5, bit7=1 双击消抖)
-const uint8_t seg_table[] = {
-    0x3F, // 0: a b c d e f
-    0x06, // 1: b c
-    0x5B, // 2: a b d e g
-    0x4F, // 3: a b c d g
-    0x66, // 4: b c f g
-    0x6D, // 5: a c d f g
-    0x7D, // 6: a c d e f g
-    0x07, // 7: a b c
-    0x7F, // 8: a b c d e f g
-    0x6F, // 9: a b c d f g
-    0x77, // A: a b c e f g
-    0x7C, // b: c d e f g
-    0x39, // C: a d e f
-    0x5E, // d: b c d e g
-    0x79, // E: a d e f g
-    0x71, // F: a e f g
-    0x3D, // G: a c d e f
-    0x76, // H: b c e f g
-    0x30, // I: b c
-    0x1E, // J: b c d e
-    0x75, // K: 无法完美显示，近似: a c e f g
-    0x38, // L: d e f
-    0x15, // M: 无法完美显示，近似: a c e
-    0x37, // n: a c e g
-    0x3F, // O: a b c d e f
-    0x73, // P: a b e f g
-    0x67, // q: a b c f g
-    0x50, // r: e g
-    0x6D, // S: a c d f g
-    0x78, // t: d e f g
-    0x3E, // U: b c d e f
-    0x3E, // V: 无法完美显示，近似同U
-    0x2A, // W: 无法完美显示，近似: b c f g
-    0x76, // X: 无法完美显示，近似同H
-    0x6E, // y: b c d f g
-    0x5B,  // Z: a b d e g
-    0x00  //空白
-};
+
+typedef enum button_state{
+    st_idle,
+    st_debounce,
+    st_down,
+    st_long_active,
+    st_wait_double,
+    st_double_active
+}BUTTON_STATE;
+
+
 
 //处理按键中断
 void button_react(void)
 {
     LED_Toggle();  
-}
-
-void print_seg(char *n)
-{
-    for (int i = 0; i < 4; i++)
-    {
-        char data = *(n+i);
-        if (data <= '9' && data >= '0') data -= 48;
-        else if (data <= 'Z' && data >= 'A') data -= 55;
-        else if (data <= 'z' && data >= 'a') data -= 87;
-        else data = 36;
-        p[i] = data;
-    }
 }
 
 //十个按键的状态机
@@ -120,11 +79,19 @@ void buttons_state(void)
         charcase = charcase & (charcase-1);
         if (charcase)
         {
-            p[0] = 'E' - '0' - 8;
-            p[1] = 'E' - '0' - 8;
-            p[2] = 'E' - '0' - 8;
-            
+            print_seg("Err"); 
         }
+        else
+        {
+            key_data = PORTC & 0x0F;
+            key_cnt = 0;
+            key_state = st_debounce;
+        }
+        return;
+    }
+    else 
+    {
+        
     }
 }
 
@@ -132,32 +99,7 @@ void Handle_Timer0(void)
 {
     sys_tic++;
     buttons_state();
-    switch (select_place)
-    {
-        case 0:
-            Dig_4_SetHigh();
-            Dig_1_SetLow(); 
-            break;
-        case 1:
-            Dig_1_SetHigh();
-            Dig_2_SetLow();
-            break;
-        case 2:
-            Dig_2_SetHigh();
-            Dig_3_SetLow();
-            break;
-        case 3:
-            Dig_3_SetHigh();
-            Dig_4_SetLow();
-            break;
-    }
-    LATA = seg_table[p[select_place]];
-    if (++select_place > 3)
-    {
-        select_place = 0;
-    }
-    
-    
+    display_seg(&select_place);  
 }
 
 int main(void)
@@ -182,7 +124,7 @@ int main(void)
     // Disable the Peripheral Interrupts 
     //INTERRUPT_PeripheralInterruptDisable(); 
     
-    print_seg("Err ");
+    print_seg("zsr");
    
     while(1)
     {
