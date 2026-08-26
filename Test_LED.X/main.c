@@ -79,7 +79,8 @@ const uint8_t seg_table[] = {
     0x2A, // W: 无法完美显示，近似: b c f g
     0x76, // X: 无法完美显示，近似同H
     0x6E, // y: b c d f g
-    0x5B  // Z: a b d e g
+    0x5B,  // Z: a b d e g
+    0x00  //空白
 };
 
 //处理按键中断
@@ -88,9 +89,43 @@ void button_react(void)
     LED_Toggle();  
 }
 
+void print_seg(char *n)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        char data = *(n+i);
+        if (data <= '9' && data >= '0') data -= 48;
+        else if (data <= 'Z' && data >= 'A') data -= 55;
+        else if (data <= 'z' && data >= 'a') data -= 87;
+        else data = 36;
+        p[i] = data;
+    }
+}
+
+//十个按键的状态机
 void buttons_state(void)
 {
+    if (key_state)
+    {
+        
+    }
+    i = 4;
+    WPUC = 0x0f;
+    TRISC = 0x0F;
     
+    charcase = PORTC & 0x0F;
+    charcase = charcase ^ (uint8_t)((1<<i) - 1);
+    if (charcase)
+    {
+        charcase = charcase & (charcase-1);
+        if (charcase)
+        {
+            p[0] = 'E' - '0' - 8;
+            p[1] = 'E' - '0' - 8;
+            p[2] = 'E' - '0' - 8;
+            
+        }
+    }
 }
 
 void Handle_Timer0(void)
@@ -147,10 +182,7 @@ int main(void)
     // Disable the Peripheral Interrupts 
     //INTERRUPT_PeripheralInterruptDisable(); 
     
-    p[0] = 1;
-    p[1] = 2;
-    p[2] = 3;
-    p[3] = 4;
+    print_seg("Err ");
    
     while(1)
     {
