@@ -1,0 +1,58 @@
+# =============================================
+# MPLAB X IDE (Microchip PIC) 项目忽略规则
+# =============================================
+
+# ---- 编译产物目录 ----
+build/
+dist/
+debug/
+
+# ---- MPLAB X IDE 本地私有配置 ----
+nbproject/private/
+
+# ---- 自动生成的 Makefile（MPLAB X 每次编译会重新生成）----
+nbproject/Makefile-*.mk
+nbproject/Makefile-genesis.properties
+nbproject/Makefile-impl.mk
+nbproject/Makefile-local-*.mk
+nbproject/Makefile-variables.mk
+
+# ---- MCC (MCC Melody) 自动保存的清单文件 ----
+mcc-manifest-autosave.yml
+
+# ---- 编译输出文件 ----
+*.hex
+*.elf
+*.map
+*.lst
+*.o
+*.obj
+*.out
+*.rlf
+*.sym
+*.sdb
+*.cmf
+*.mum
+*.hxl
+*.i
+*.p1
+*.p1.d
+*.dbg
+*.cof
+*.tmp
+*.pre
+*.d
+
+# ---- 调试 / 模拟器临时文件 ----
+*.dcf
+*.dtm
+
+# ---- 备份文件 ----
+*.bak
+*.old
+*~
+
+# ---- 通用系统文件 ----
+Thumbs.db
+Desktop.ini
+.DS_Store
