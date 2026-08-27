@@ -28,8 +28,8 @@ void ADCC_Initialize(void) {
     ADCON0 = 0x84;
     // ADPPOL VSS; ADIPEN disabled; ADGPOL digital_low; ADDSEN disabled; 
     ADCON1 = 0x0;
-    // ADPSIS ADRES; ADCRS 0; ADACLR disabled; ADMD Accumulate_mode; 
-    ADCON2 = 0x1;
+    // ADPSIS ADRES; ADCRS 0; ADACLR disabled; ADMD Basic_mode; 
+    ADCON2 = 0x0;
     // ADCALC First derivative of Single measurement; ADSOI ADGO not cleared; ADTMD enabled; 
     ADCON3 = 0x7;
     // ADACT disabled; 

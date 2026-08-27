@@ -34,43 +34,107 @@
 */
 #include "mcc_generated_files/system/system.h"
 #include "Touch_Read.h"
+#include "Key_Scan.h"
+#include "Seg_driver.h"
+
 /*
     Main application
 */
+ void TMR_INT_Handler(void);
+ uint8_t p[4]={36,36,36,36};
 //状态机枚举定义
  enum STATE
 {
     STATE_IDLE=0U,
     STATE_CORRECT=1U,
-    STATE_DISPLAY=2U,  
+    STATE_DISPLAY=2U,
+    //STATE_DEBOUNCE=3U,
+    //STATE_DOWN=4U,
+   // STATE_LONG_ACTIVE=5U,
+   // STATE_DOUBLE_WAIT=6U,
+    //STATE_DOUBLE_ACTIVE=7U
 };
+static uint8_t level_tmp=0;
+static uint8_t seg_index = 0;
 static enum STATE current_state=STATE_IDLE;
 static enum STATE next_state=STATE_IDLE;
+uint16_t THRESHOLD=500;
+uint8_t Key_Value=0;
 int main(void)
 {
     SYSTEM_Initialize();
     // If using interrupts in PIC18 High/Low Priority Mode you need to enable the Global High and Low Interrupts 
     // If using interrupts in PIC Mid-Range Compatibility Mode you need to enable the Global and Peripheral Interrupts 
     // Use the following macros to: 
-
+    TMR0_PeriodMatchCallbackRegister(TMR_INT_Handler);
     // Enable the Global Interrupts 
-    //INTERRUPT_GlobalInterruptEnable(); 
+    INTERRUPT_GlobalInterruptEnable(); 
 
     // Disable the Global Interrupts 
     //INTERRUPT_GlobalInterruptDisable(); 
 
     // Enable the Peripheral Interrupts 
-    //INTERRUPT_PeripheralInterruptEnable(); 
+    INTERRUPT_PeripheralInterruptEnable(); 
 
     // Disable the Peripheral Interrupts 
     //INTERRUPT_PeripheralInterruptDisable(); 
 
-
+    uint8_t Touch_Channel=0;
+    char tmp[4]={0};
     while(1)
     {
-        uint16_t ref=Touch_Read(0x13);
-        uint16_t s1=Touch_Read(0x10);
-        uint16_t s2=Touch_Read(0x11);
-        uint16_t s3=Touch_Read(0x12);
+        //print_seg("Err");
+        //display_seg(&seg_index);
+        level_tmp=Scan_All_Keys(); 
+        //uint16_t Diff = Compare_Touch_Channel(500,15);
+        //Touch_Channel=Scan_Touch();
+       // Num2Str(Touch_Channel,tmp);
+        //print_seg(tmp);
+        p[0]=key(level_tmp,Key_Value);
+        //Num2Str(Touch_Read_Avg(0x14U), tmp);   // 用手摸 RC4，看数字变不变、变多少
+        print_seg(tmp);
     }    
+    return 0;
 }
+
+//状态更新函数
+void STATE_Update()
+{
+    switch(current_state)
+    {
+        case STATE_IDLE:
+            
+            break;    
+        case STATE_CORRECT:
+            
+            break;
+        case STATE_DISPLAY:
+            
+            break;
+    }
+}
+void STATE_Operation()
+{
+     switch(current_state)
+    {
+        case STATE_IDLE:
+            
+            break;    
+        case STATE_CORRECT:
+            
+            break;
+        case STATE_DISPLAY:
+            
+            break;
+       
+    }
+}
+void TMR_INT_Handler()
+{   
+   
+    display_seg(&seg_index);
+    //TMR0_Reload();
+    
+}
+
+

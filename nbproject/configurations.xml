@@ -17,8 +17,14 @@
           <itemPath>mcc_generated_files/system/config_bits.h</itemPath>
           <itemPath>mcc_generated_files/system/pins.h</itemPath>
         </logicalFolder>
+        <logicalFolder name="timer" displayName="timer" projectFiles="true">
+          <itemPath>mcc_generated_files/timer/tmr0.h</itemPath>
+          <itemPath>mcc_generated_files/timer/tmr0_deprecated.h</itemPath>
+        </logicalFolder>
       </logicalFolder>
       <itemPath>Touch_Read.h</itemPath>
+      <itemPath>Key_Scan.h</itemPath>
+      <itemPath>Seg_driver.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -50,11 +56,21 @@
             <itemPath>mcc_generated_files/system/src/pins.c</itemPath>
           </logicalFolder>
         </logicalFolder>
+        <logicalFolder name="timer" displayName="timer" projectFiles="true">
+          <logicalFolder name="src" displayName="src" projectFiles="true">
+            <itemPath>mcc_generated_files/timer/src/tmr0.c</itemPath>
+          </logicalFolder>
+        </logicalFolder>
       </logicalFolder>
       <itemPath>main.c</itemPath>
       <itemPath>Touch_Read.c</itemPath>
+      <itemPath>Key_Scan.c</itemPath>
+      <itemPath>Seg_driver.c</itemPath>
     </logicalFolder>
   </logicalFolder>
+  <sourceRootList>
+    <Elem>.</Elem>
+  </sourceRootList>
   <projectmakefile>Makefile</projectmakefile>
   <confs>
     <conf name="default" type="2">
@@ -192,6 +208,20 @@
         <property key="program-the-device-with-default-config-words" value="false"/>
         <property key="remove-unused-sections" value="true"/>
       </HI-TECH-LINK>
+      <Simulator>
+        <property key="W0106_SIM_PERIPH_PARTIAL_SUPPORT" value="report"/>
+        <property key="W0214_ADC_POSITIVE_INPUT_DIGITAL" value="report"/>
+        <property key="W0215_ADC_POSITIVE_INPUT_OUTPUT" value="report"/>
+        <property key="W0223_ADC_UNDERFLOW" value="report"/>
+        <property key="periphADC1.minTacq" value="4"/>
+      </Simulator>
+      <Tool>
+        <property key="W0106_SIM_PERIPH_PARTIAL_SUPPORT" value="report"/>
+        <property key="W0214_ADC_POSITIVE_INPUT_DIGITAL" value="report"/>
+        <property key="W0215_ADC_POSITIVE_INPUT_OUTPUT" value="report"/>
+        <property key="W0223_ADC_UNDERFLOW" value="report"/>
+        <property key="periphADC1.minTacq" value="4"/>
+      </Tool>
       <XC8-CO>
         <property key="coverage-enable" value=""/>
         <property key="stack-guidance" value="false"/>
