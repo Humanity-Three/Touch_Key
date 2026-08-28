@@ -6,6 +6,9 @@
 #define TOUCH_CH_RC5  0x15u
 #define TOUCH_CH_RC6  0x16u
 #define CVD_AVG_COUNT 8u
+/* 自动校准速率：背离上电基准慢速跟踪，回向上电基准快速跟踪 */
+#define BASE_DRIFT_SLOW_N 128u
+#define BASE_DRIFT_FAST_N 8u
 
 static const uint8_t touch_channel[3] =
 {
@@ -13,7 +16,8 @@ static const uint8_t touch_channel[3] =
     TOUCH_CH_RC4, TOUCH_CH_RC5, TOUCH_CH_RC6
 };
 
-static int16_t touch_base[3];
+static int16_t touch_base[3];        /* 当前（可自动校准的）基线 */
+static int16_t touch_base_init[3];   /* 上电时的基准，用于方向判断 */
 static int16_t touch_pressed[3];
 extern uint16_t THRESHOLD;
 
@@ -61,6 +65,7 @@ void Touch_Calibrate(void)
         for(n=0;n<4u;n++) (void)Touch_CVD_Read(touch_channel[i]);
         for(n=0;n<8u;n++) sum+=Touch_CVD_Read_Avg(touch_channel[i]);
         touch_base[i]=(int16_t)(sum/8);
+        touch_base_init[i]=touch_base[i];   /* 记录上电基准 */
     }
 }
 
@@ -109,8 +114,24 @@ uint8_t Scan_Touch(void)
         }
         else if(delta<(uint16_t)(THRESHOLD/4u+1u))
         {
-            int32_t tracked=(int32_t)touch_base[i]*31+(int32_t)value;
-            touch_base[i]=(int16_t)(tracked/32);
+            /* 方向敏感自动校准：
+             * - 值朝背离上电基准的方向移动 -> 慢速跟踪（防漂移污染基线）
+             * - 值朝回归上电基准的方向移动 -> 快速跟踪（快速恢复） */
+            int16_t drift=(int16_t)(touch_base[i]-touch_base_init[i]);
+            int16_t dx=(int16_t)(value-touch_base[i]);
+            uint16_t n;
+            int32_t tracked;
+
+            if(drift==0 || ((int32_t)drift*(int32_t)dx)>0)
+            {
+                n=BASE_DRIFT_SLOW_N;   /* 背离/方向未知：慢速 */
+            }
+            else
+            {
+                n=BASE_DRIFT_FAST_N;   /* 回归上电基准：快速 */
+            }
+            tracked=(int32_t)touch_base[i]*(int32_t)(n-1u)+(int32_t)value;
+            touch_base[i]=(int16_t)(tracked/(int32_t)n);
         }
     }
 
