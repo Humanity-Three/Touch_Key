@@ -34,6 +34,7 @@
 #include "../../system/interrupt.h"
 #include "../../system/system.h"
 #include "../pins.h"
+#include "../../uart/eusart.h"
 
 void (*INT_InterruptHandler)(void);
 
@@ -64,7 +65,17 @@ void __interrupt() INTERRUPT_InterruptManager (void)
         if(PIE0bits.TMR0IE == 1 && PIR0bits.TMR0IF == 1)
         {
             TMR0_ISR();
-        } 
+        }
+        else if(PIE3bits.TXIE == 1 && PIR3bits.TXIF == 1)
+        {
+            /* MCC EUSART 发送中断 */
+            EUSART_TxInterruptHandler();
+        }
+        else if(PIE3bits.RCIE == 1 && PIR3bits.RCIF == 1)
+        {
+            /* MCC EUSART 接收中断 */
+            EUSART_RxInterruptHandler();
+        }
         else
         {
             //Unhandled Interrupt

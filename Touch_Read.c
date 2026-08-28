@@ -116,3 +116,14 @@ uint8_t Scan_Touch(void)
 
     return best;
 }
+
+/* 读取三个触摸通道的 CVD 差分读数（各 8 次平均），供串口上报电容大小。 */
+void Touch_CVD_Read_All_Avg(int16_t values[3])
+{
+    uint8_t i;
+
+    for(i=0;i<3u;i++)
+    {
+        values[i]=Touch_CVD_Read_Avg(touch_channel[i]);
+    }
+}

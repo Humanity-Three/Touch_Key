@@ -24,7 +24,7 @@ CLEAN_SUBPROJECTS=${CLEAN_SUBPROJECTS_${SUBPROJECTS}}
 
 
 # Project Name
-PROJECTNAME=Touch_Show.X
+PROJECTNAME=Touch_Key
 
 # Active Configuration
 DEFAULTCONF=default

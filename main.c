@@ -1,5 +1,6 @@
 #include "mcc_generated_files/system/system.h"
 #include "mcc_generated_files/nvm/nvm.h"
+#include "mcc_generated_files/uart/eusart.h"
 #include "Touch_Read.h"
 #include "Key_Scan.h"
 #include "Seg_driver.h"
@@ -11,6 +12,8 @@ void Touch_Operation(void);
 void Key_Operation(void);
 void THR_Load(void);
 void THR_Save(void);
+void UART_ReportTouch(void);
+static void Uart_Send_Touch(uint8_t c1, uint8_t c2, uint8_t c3);
 uint8_t p[4]={0,13,0,0};                    /* 上电立即显示0D00 */
 
 enum STATE
@@ -85,21 +88,30 @@ void THR_Save(void)
     NVM_UnlockKeyClear();
 }
 
+/* PPS 引脚映射由 MCC 的 PIN_MANAGER_Initialize 生成：
+ *   RB6PPS = 0x10（RB6 -> EUSART TX）
+ *   RXPPS  = 0x0F（RB7 -> EUSART RX）
+ * 因此这里不再手动配置 PPS。 */
+
 int main(void)
 {
     SYSTEM_Initialize();
+    EUSART_Initialize();                     /* MCC EUSART 初始化（9600, 8N1） */
     THR_Load();                              /* 上电自动读取手动保存的阈值 */
     TMR0_PeriodMatchCallbackRegister(TMR_INT_Handler);
     INTERRUPT_GlobalInterruptEnable();
     INTERRUPT_PeripheralInterruptEnable();
     /* 先启动显示中断，再做CVD基线校准，避免校准期间数码管全黑。 */
     Touch_Calibrate();                          /* 上电时请勿触摸按键 */
+    /* 上电测试帧：03 11 22 33 FC，用于验证串口链路，验证通过后可删除 */
+    Uart_Send_Touch(0x11u, 0x22u, 0x33u);
 
     while(1)
     {
         Key_Operation();
         STATE_Update();
         STATE_Operation();
+        UART_ReportTouch();                  /* 周期上报三路触摸电容 */
     }
     return 0;
 }
@@ -446,4 +458,33 @@ void TMR_INT_Handler()
     touch_sample_due=1;
     key_scan_due=1;
 
+}
+
+/* 每 100ms 上报一次三路触摸电容（CVD 差分读数低 8 位）。 */
+#define UART_REPORT_PERIOD 25u               /* 25 x 4ms = 100ms */
+
+static void Uart_Send_Touch(uint8_t c1, uint8_t c2, uint8_t c3)
+{
+    EUSART_Write(0x03u);   /* 帧头 */
+    EUSART_Write(c1);
+    EUSART_Write(c2);
+    EUSART_Write(c3);
+    EUSART_Write(0xFCu);   /* 帧尾 */
+}
+
+void UART_ReportTouch(void)
+{
+    static uint16_t last_report=0;
+    uint16_t now;
+    int16_t vals[3];
+
+    INTERRUPT_GlobalInterruptDisable();
+    now=touch_time_4ms;
+    INTERRUPT_GlobalInterruptEnable();
+
+    if((uint16_t)(now-last_report)<UART_REPORT_PERIOD) return;
+    last_report=now;
+
+    Touch_CVD_Read_All_Avg(vals);
+    Uart_Send_Touch((uint8_t)vals[0],(uint8_t)vals[1],(uint8_t)vals[2]);
 }
