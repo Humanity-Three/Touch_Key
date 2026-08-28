@@ -14,6 +14,7 @@ void THR_Load(void);
 void THR_Save(void);
 static void Uart_Send_Data(uint8_t data);
 static void Uart_Send_Data_N(uint8_t data, uint8_t n);
+static void Uart_Send_Data3(uint8_t c1, uint8_t c2, uint8_t c3);
 static void UART_Rx_Process(void);
 static void Touch_On_Single(uint8_t key);
 static void Touch_On_Double(uint8_t key);
@@ -48,7 +49,8 @@ enum Key_event
 enum UART_MODE
 {
     MODE_IN=0U,
-    MODE_OUT=1U
+    MODE_OUT=1U,
+    MODE_CAP=2U
 };
 static uint8_t uart_mode=MODE_OUT;   /* 上电默认输出模式 */
 static uint8_t tx_data=50;           /* 输出模式待发送数据（初始 50） */
@@ -227,6 +229,12 @@ void STATE_Update()
             }
             return;
         }
+        /* 键10：切换电容读取模式。 */
+        if(cur_key==10)
+        {
+            uart_mode=(uart_mode==MODE_CAP)?MODE_OUT:MODE_CAP;
+            return;
+        }
 
         /* 键1从任意非校准状态进入校准；校准状态下再次按键1退出。 */
         if(cur_key==1)
@@ -358,6 +366,32 @@ void Touch_Operation(void)
     static uint8_t pending_key=0;
     static uint16_t press_start=0, repeat_time=0, pending_time=0;
     uint16_t now;
+
+    /* 电容读取模式：每 100ms 读取当前通道电容并显示/发送三路电容帧。 */
+    if(uart_mode==MODE_CAP)
+    {
+        static uint16_t cap_last=0;
+        uint16_t cap_now;
+        int16_t vals[3];
+        uint8_t ch, cap;
+
+        INTERRUPT_GlobalInterruptDisable();
+        cap_now=touch_time_4ms;
+        INTERRUPT_GlobalInterruptEnable();
+        if((uint16_t)(cap_now-cap_last)<25u) return;   /* 100ms 节拍 */
+        cap_last=cap_now;
+
+        ch=Scan_Touch();
+        if(ch==0xFFu) ch=0u;                     /* 无触摸默认通道1 */
+        Touch_CVD_Read_All_Avg(vals);
+        cap=(uint8_t)vals[ch];                   /* 当前通道电容值 */
+        p[0]=12;                                 /* C */
+        p[1]=(uint8_t)(cap/100u);
+        p[2]=(uint8_t)((cap/10u)%10u);
+        p[3]=(uint8_t)(cap%10u);
+        Uart_Send_Data3((uint8_t)vals[0],(uint8_t)vals[1],(uint8_t)vals[2]);
+        return;
+    }
 
     INTERRUPT_GlobalInterruptDisable();
     now=touch_time_4ms;
@@ -505,6 +539,16 @@ static void Uart_Send_Data_N(uint8_t data, uint8_t n)
         EUSART_Write(0xFCu);   /* 帧尾 */
         while(!EUSART_IsTxDone()) { }   /* 等本帧发完 */
     }
+}
+
+/* 发送三路触摸电容帧：0x03 | c1 | c2 | c3 | 0xFC */
+static void Uart_Send_Data3(uint8_t c1, uint8_t c2, uint8_t c3)
+{
+    EUSART_Write(0x03u);   /* 帧头 */
+    EUSART_Write(c1);      /* 触摸键 1 电容 */
+    EUSART_Write(c2);      /* 触摸键 2 电容 */
+    EUSART_Write(c3);      /* 触摸键 3 电容 */
+    EUSART_Write(0xFCu);   /* 帧尾 */
 }
 
 /* 主循环轮询接收：解析 0x03 | data | 0xFC 帧，data 供输入模式显示。 */
