@@ -12,8 +12,12 @@ void Touch_Operation(void);
 void Key_Operation(void);
 void THR_Load(void);
 void THR_Save(void);
-void UART_ReportTouch(void);
-static void Uart_Send_Touch(uint8_t c1, uint8_t c2, uint8_t c3);
+static void Uart_Send_Data(uint8_t data);
+static void Uart_Send_Data_N(uint8_t data, uint8_t n);
+static void UART_Rx_Process(void);
+static void Touch_On_Single(uint8_t key);
+static void Touch_On_Double(uint8_t key);
+static void Touch_On_LongRepeat(uint8_t key);
 uint8_t p[4]={0,13,0,0};                    /* 上电立即显示0D00 */
 
 enum STATE
@@ -39,6 +43,16 @@ enum Key_event
     KEY_DOUBLE_RELEASE=7U,
     KEY_ERROR=8U,
 };
+
+/* UART 数据模式：0=输入模式，1=输出模式 */
+enum UART_MODE
+{
+    MODE_IN=0U,
+    MODE_OUT=1U
+};
+static uint8_t uart_mode=MODE_OUT;   /* 上电默认输出模式 */
+static uint8_t tx_data=50;           /* 输出模式待发送数据（初始 50） */
+static uint8_t rx_data=0;            /* 输入模式最新接收数据 */
 
 static uint8_t seg_index = 0;
 static enum STATE current_state=STATE_IDLE;
@@ -103,15 +117,13 @@ int main(void)
     INTERRUPT_PeripheralInterruptEnable();
     /* 先启动显示中断，再做CVD基线校准，避免校准期间数码管全黑。 */
     Touch_Calibrate();                          /* 上电时请勿触摸按键 */
-    /* 上电测试帧：03 11 22 33 FC，用于验证串口链路，验证通过后可删除 */
-    Uart_Send_Touch(0x11u, 0x22u, 0x33u);
 
     while(1)
     {
         Key_Operation();
         STATE_Update();
         STATE_Operation();
-        UART_ReportTouch();                  /* 周期上报三路触摸电容 */
+        UART_Rx_Process();                   /* 接收串口数据帧 */
     }
     return 0;
 }
@@ -193,6 +205,29 @@ void STATE_Update()
     {
         uint8_t is_long = (key_event==KEY_LONG_RELEASE);
         key_event=KEY_NO_EVENT;
+
+        /* 键7：切换为输出模式。 */
+        if(cur_key==7)
+        {
+            uart_mode=MODE_OUT;
+            return;
+        }
+        /* 键8：切换为输入模式。 */
+        if(cur_key==8)
+        {
+            uart_mode=MODE_IN;
+            return;
+        }
+        /* 键9：输出模式下把当前数据经串口发出。 */
+        if(cur_key==9)
+        {
+            if(uart_mode==MODE_OUT)
+            {
+                Uart_Send_Data(tx_data);
+            }
+            return;
+        }
+
         /* 键1从任意非校准状态进入校准；校准状态下再次按键1退出。 */
         if(cur_key==1)
         {
@@ -321,7 +356,6 @@ void Touch_Operation(void)
     static uint8_t candidate=0, candidate_count=0, stable_key=0;
     static uint8_t press_key=0, long_active=0, second_click=0;
     static uint8_t pending_key=0;
-    static uint8_t shown_key=0, shown_type=13;  /* 13='D'：单击 */
     static uint16_t press_start=0, repeat_time=0, pending_time=0;
     uint16_t now;
 
@@ -359,10 +393,7 @@ void Touch_Operation(void)
                     /* 换键时，前一个待定点击立即确认为单击。 */
                     if(pending_key!=0u)
                     {
-                        if(touch_count[pending_key-1u]<99u)
-                            ++touch_count[pending_key-1u];
-                        shown_key=pending_key;
-                        shown_type=13;          /* D: single */
+                        Touch_On_Single(pending_key);
                         pending_key=0;
                     }
                     second_click=0;
@@ -377,10 +408,7 @@ void Touch_Operation(void)
                 {
                     if(second_click)
                     {
-                        uint8_t room=(uint8_t)(99u-touch_count[press_key-1u]);
-                        touch_count[press_key-1u]+=(room>=5u)?5u:room;
-                        shown_key=press_key;
-                        shown_type=28;          /* S: double */
+                        Touch_On_Double(press_key);
                         pending_key=0;
                     }
                     else
@@ -400,9 +428,7 @@ void Touch_Operation(void)
     if(pending_key!=0u && stable_key==0u &&
        (uint16_t)(now-pending_time)>=TOUCH_DOUBLE_TIME)
     {
-        if(touch_count[pending_key-1u]<99u) ++touch_count[pending_key-1u];
-        shown_key=pending_key;
-        shown_type=13;                          /* D: single */
+        Touch_On_Single(pending_key);
         pending_key=0;
     }
 
@@ -412,34 +438,33 @@ void Touch_Operation(void)
         /* 第二击演变成长按时，之前的第一击仍按一次单击结算。 */
         if(second_click && pending_key!=0u)
         {
-            if(touch_count[pending_key-1u]<99u) ++touch_count[pending_key-1u];
+            Touch_On_Single(pending_key);
             pending_key=0;
             second_click=0;
         }
         while((uint16_t)(now-repeat_time)>=TOUCH_HALF_SECOND)
         {
             repeat_time=(uint16_t)(repeat_time+TOUCH_HALF_SECOND);
-            if(touch_count[stable_key-1u]<99u) ++touch_count[stable_key-1u];
+            Touch_On_LongRepeat(stable_key);
         }
         long_active=1;
-        shown_key=stable_key;
-        shown_type=21;                          /* L */
     }
 
-    if(shown_key==0u)
+    /* 输出/输入模式下的数码管显示（校准态由 STATE_Operation 显示阈值）。 */
+    if(uart_mode==MODE_OUT)
     {
-        /* 上电/未触摸时给出明确的正常待机显示。 */
-        p[0]=0;
-        p[1]=13;                              /* D */
-        p[2]=0;
-        p[3]=0;
+        p[0]=24;                 /* O：输出模式 */
+        p[1]=36;                 /* 空白 */
+        p[2]=(uint8_t)(tx_data/10u);
+        p[3]=(uint8_t)(tx_data%10u);
     }
     else
     {
-        p[0]=shown_key;
-        p[1]=shown_type;
-        p[2]=(uint8_t)(touch_count[shown_key-1u]/10u);
-        p[3]=(uint8_t)(touch_count[shown_key-1u]%10u);
+        uint8_t disp=(rx_data>99u)?99u:rx_data;
+        p[0]=18;                 /* I：输入模式 */
+        p[1]=36;                 /* 空白 */
+        p[2]=(uint8_t)(disp/10u);
+        p[3]=(uint8_t)(disp%10u);
     }
 }
 
@@ -460,31 +485,100 @@ void TMR_INT_Handler()
 
 }
 
-/* 每 100ms 上报一次三路触摸电容（CVD 差分读数低 8 位）。 */
-#define UART_REPORT_PERIOD 25u               /* 25 x 4ms = 100ms */
-
-static void Uart_Send_Touch(uint8_t c1, uint8_t c2, uint8_t c3)
+/* 发送一帧：0x03 | data | 0xFC */
+static void Uart_Send_Data(uint8_t data)
 {
     EUSART_Write(0x03u);   /* 帧头 */
-    EUSART_Write(c1);
-    EUSART_Write(c2);
-    EUSART_Write(c3);
+    EUSART_Write(data);    /* 数据 */
     EUSART_Write(0xFCu);   /* 帧尾 */
 }
 
-void UART_ReportTouch(void)
+/* 连续发送 n 帧：逐帧等待发完再发下一帧，避免发送缓冲溢出丢帧。 */
+static void Uart_Send_Data_N(uint8_t data, uint8_t n)
 {
-    static uint16_t last_report=0;
-    uint16_t now;
-    int16_t vals[3];
+    uint8_t i;
 
-    INTERRUPT_GlobalInterruptDisable();
-    now=touch_time_4ms;
-    INTERRUPT_GlobalInterruptEnable();
+    for(i=0u;i<n;i++)
+    {
+        EUSART_Write(0x03u);   /* 帧头 */
+        EUSART_Write(data);    /* 数据 */
+        EUSART_Write(0xFCu);   /* 帧尾 */
+        while(!EUSART_IsTxDone()) { }   /* 等本帧发完 */
+    }
+}
 
-    if((uint16_t)(now-last_report)<UART_REPORT_PERIOD) return;
-    last_report=now;
+/* 主循环轮询接收：解析 0x03 | data | 0xFC 帧，data 供输入模式显示。 */
+static void UART_Rx_Process(void)
+{
+    static uint8_t rx_state=0;   /* 0=等帧头, 1=已收帧头, 2=已收数据 */
 
-    Touch_CVD_Read_All_Avg(vals);
-    Uart_Send_Touch((uint8_t)vals[0],(uint8_t)vals[1],(uint8_t)vals[2]);
+    while(EUSART_IsRxReady())
+    {
+        uint8_t b=EUSART_Read();
+        if(rx_state==0u)
+        {
+            if(b==0x03u) rx_state=1u;
+        }
+        else if(rx_state==1u)
+        {
+            rx_data=b;              /* 保存最新数据 */
+            rx_state=2u;
+        }
+        else /* rx_state==2u：收到帧尾或异常，回到等待帧头 */
+        {
+            rx_state=0u;
+        }
+    }
+}
+
+/* 触摸键动作：输出模式下 T1/T3 调节待发数据；其他模式维持原计数。 */
+static void Touch_On_Single(uint8_t key)
+{
+    if(uart_mode==MODE_OUT)
+    {
+        if(key==1u)      tx_data=(tx_data>=99u)?99u:(uint8_t)(tx_data+1u);
+        else if(key==3u) tx_data=(tx_data>=1u)?(uint8_t)(tx_data-1u):0u;
+        else if(key==2u) Uart_Send_Data(tx_data);   /* T2：输出模式下短按发送当前数据 */
+    }
+    else
+    {
+        if(touch_count[key-1u]<99u) ++touch_count[key-1u];
+    }
+}
+
+static void Touch_On_Double(uint8_t key)
+{
+    if(uart_mode==MODE_OUT)
+    {
+        if(key==1u)
+        {
+            uint16_t v=(uint16_t)tx_data+5u;
+            tx_data=(v>99u)?99u:(uint8_t)v;
+        }
+        else if(key==3u)
+        {
+            uint16_t v=(tx_data>=5u)?((uint16_t)tx_data-5u):0u;
+            tx_data=(uint8_t)v;
+        }
+        else if(key==2u) Uart_Send_Data_N(tx_data,5u);   /* T2：双击发送 5 次 */
+    }
+    else
+    {
+        uint8_t room=(uint8_t)(99u-touch_count[key-1u]);
+        touch_count[key-1u]+=(room>=5u)?5u:room;
+    }
+}
+
+static void Touch_On_LongRepeat(uint8_t key)
+{
+    if(uart_mode==MODE_OUT)
+    {
+        if(key==1u)      tx_data=(tx_data>=99u)?99u:(uint8_t)(tx_data+1u);
+        else if(key==3u) tx_data=(tx_data>=1u)?(uint8_t)(tx_data-1u):0u;
+        else if(key==2u) Uart_Send_Data(tx_data);   /* T2：长按连续发送（每 0.5s 一帧） */
+    }
+    else
+    {
+        if(touch_count[key-1u]<99u) ++touch_count[key-1u];
+    }
 }
