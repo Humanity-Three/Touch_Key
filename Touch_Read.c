@@ -127,3 +127,17 @@ void Touch_CVD_Read_All_Avg(int16_t values[3])
         values[i]=Touch_CVD_Read_Avg(touch_channel[i]);
     }
 }
+
+/* 一次采样同时返回三路原始读数（values）与相对各自基线的差值（deltas）。
+ * deltas = |当前值 - 基线|，未按下时约为 0，按下时对应通道增大。 */
+void Touch_CVD_Read_All_Avg_Delta(int16_t values[3], uint16_t deltas[3])
+{
+    uint8_t i;
+
+    for(i=0;i<3u;i++)
+    {
+        int16_t value=Touch_CVD_Read_Avg(touch_channel[i]);
+        values[i]=value;
+        deltas[i]=abs_diff_i16(value,touch_base[i]);
+    }
+}

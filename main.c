@@ -373,6 +373,7 @@ void Touch_Operation(void)
         static uint16_t cap_last=0;
         uint16_t cap_now;
         int16_t vals[3];
+        uint16_t deltas[3];
         uint8_t ch, cap;
 
         INTERRUPT_GlobalInterruptDisable();
@@ -383,13 +384,14 @@ void Touch_Operation(void)
 
         ch=Scan_Touch();
         if(ch==0xFFu) ch=0u;                     /* 无触摸默认通道1 */
-        Touch_CVD_Read_All_Avg(vals);
+        Touch_CVD_Read_All_Avg_Delta(vals,deltas);
         cap=(uint8_t)vals[ch];                   /* 当前通道电容值 */
         p[0]=12;                                 /* C */
         p[1]=(uint8_t)(cap/100u);
         p[2]=(uint8_t)((cap/10u)%10u);
         p[3]=(uint8_t)(cap%10u);
-        Uart_Send_Data3((uint8_t)vals[0],(uint8_t)vals[1],(uint8_t)vals[2]);
+        /* 发送三路相对基线差值：未按下≈0，按下时对应通道增大 */
+        Uart_Send_Data3((uint8_t)deltas[0],(uint8_t)deltas[1],(uint8_t)deltas[2]);
         return;
     }
 
