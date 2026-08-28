@@ -229,10 +229,10 @@ void STATE_Update()
             }
             return;
         }
-        /* 键10：切换电容读取模式。 */
+        /* 键10：进入电容读取模式（幂等，再按模式不变）。 */
         if(cur_key==10)
         {
-            uart_mode=(uart_mode==MODE_CAP)?MODE_OUT:MODE_CAP;
+            uart_mode=MODE_CAP;
             return;
         }
 
