@@ -44,7 +44,7 @@ uint8_t Scan_All_Keys(void)
     }
     else 
     {
-     print_seg("Err");
+     /* 扫描异常只按无键处理，底层扫描不能改写数码管缓冲。 */
      return 0;
     }      
     }

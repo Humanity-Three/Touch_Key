@@ -18,38 +18,38 @@ void print_seg(char *n)
 
 void display_seg(uint8_t *select_place)
 {
-    switch (*select_place)
+    uint8_t place=*select_place;
+
+    /* 先关闭全部位选，避免切换段码时上一位或下一位被瞬间点亮。 */
+    IO_RB0_SetHigh();
+    IO_RB1_SetHigh();
+    IO_RB2_SetHigh();
+    IO_RB3_SetHigh();
+
+    /* 位选仍关闭时更新段码，再只打开当前一位。 */
+    LATA = seg_table[p[place]];
+
+    switch (place)
     {
         case 0:
-            //Dig_4_SetHigh();
-            IO_RB3_SetHigh();
-            //Dig_1_SetLow();
             IO_RB0_SetLow();
             break;
         case 1:
-           // Dig_1_SetHigh();
-            IO_RB0_SetHigh();
-           // Dig_2_SetLow();
             IO_RB1_SetLow();
             break;
         case 2:
-            //Dig_2_SetHigh();
-            IO_RB1_SetHigh();
-            //Dig_3_SetLow();
             IO_RB2_SetLow();
             break;
         case 3:
-           // Dig_3_SetHigh();
-            IO_RB2_SetHigh();
-           // Dig_4_SetLow();
             IO_RB3_SetLow();
             break;
+        default:
+            place=0;
+            IO_RB0_SetLow();
+            break;
     }
-    LATA = seg_table[p[*select_place]];
-    if (++(*select_place) > 3)
-    {
-        *select_place = 0;
-    }
+
+    *select_place=(uint8_t)((place+1u)&0x03u);
     return;
 }
 

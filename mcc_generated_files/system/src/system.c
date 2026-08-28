@@ -42,6 +42,7 @@ void SYSTEM_Initialize(void)
     PIN_MANAGER_Initialize();
     TMR0_Initialize();
     ADCC_Initialize();
+    NVM_Initialize();
     INTERRUPT_Initialize();
 }
 

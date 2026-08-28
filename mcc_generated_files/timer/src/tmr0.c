@@ -44,7 +44,7 @@ static void TMR0_DefaultCallback(void);
 
 void TMR0_Initialize(void)
 {
-    TMR0H = (uint8_t)0xF9;                    // Period 4ms; Frequency 1000000 Hz; Count 249
+    TMR0H = (uint8_t)0xF9;                    // Base 250us; postscaler 1:4 => Period 1ms
     TMR0L = (uint8_t)0x0;
     
     T0CON1 = (uint8_t)((2 << _T0CON1_T0CS_POSN)   // T0CS FOSC/4
@@ -58,7 +58,7 @@ void TMR0_Initialize(void)
 
     
     
-    T0CON0 = (uint8_t)((15 << _T0CON0_T0OUTPS_POSN)   // T0OUTPS 1:16
+    T0CON0 = (uint8_t)((3 << _T0CON0_T0OUTPS_POSN)   // T0OUTPS 1:4
         | (1 << _T0CON0_T0EN_POSN)   // T0EN enabled
         | (0 << _T0CON0_T016BIT_POSN));  // T016BIT 8-bit
 }

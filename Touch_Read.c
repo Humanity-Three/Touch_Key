@@ -1,53 +1,118 @@
 #include "Touch_Read.h"
-#include "mcc_generated_files/system/interrupt.h"
-#include "mcc_generated_files/system/pins.h"
-#include "mcc_generated_files/system/config_bits.h"
-#include "stdint.h"
+#include "mcc_generated_files/system/system.h"
+#include <stdint.h>
 
 #define TOUCH_CH_RC4  0x14u
 #define TOUCH_CH_RC5  0x15u
 #define TOUCH_CH_RC6  0x16u
-#define CH_AVSS       0x3Cu 
+#define CVD_AVG_COUNT 8u
 
-static uint16_t touch_base[3];
+static const uint8_t touch_channel[3] =
+{
+    /* 触摸键1、2、3分别接在RC4、RC5、RC6。 */
+    TOUCH_CH_RC4, TOUCH_CH_RC5, TOUCH_CH_RC6
+};
+
+static int16_t touch_base[3];
+static int16_t touch_pressed[3];
 extern uint16_t THRESHOLD;
 
-static void adcc_discharge_and_switch(uint8_t ch)
+static uint16_t abs_diff_i16(int16_t a, int16_t b)
 {
-    ADPCH = CH_AVSS;
-    ADCON0bits.GO = 1;
-    while (ADCON0bits.GO_nDONE) {}
-    ADPCH = ch;
-    ADCON0bits.GO = 1;          /* 目标通道也让一次采样动作/充电稳定 */
-    while (ADCON0bits.GO_nDONE) {}
+    int32_t delta=(int32_t)a-(int32_t)b;
+    return (uint16_t)((delta<0)?-delta:delta);
 }
 
-uint16_t Touch_Read_Avg(uint8_t ch)
+int16_t Touch_CVD_Read(uint8_t channel)
 {
-    static const uint8_t N = 16;
-    uint32_t sum = 0;
-    uint8_t i;
-    adcc_discharge_and_switch(ch);            /* 放电 + 换通道 → 避免串扰 */
-    for (i = 0; i < N; i++)
+    ADPCH=channel;
+
+    /* ADCONT=0时，差分CVD的两个样本分别由两次软件触发完成。 */
+    ADCON0bits.ADGO=1;
+    while(ADCON0bits.GO_nDONE)
     {
-        ADPCH = ch;
-        ADCON0bits.GO = 1;
-        while (ADCON0bits.GO_nDONE) {}
-        sum += ((uint16_t)ADRESH << 8) | ADRESL;
     }
-    return (uint16_t)(sum / N);
+
+    ADCON0bits.ADGO=1;
+    while(ADCON0bits.GO_nDONE)
+    {
+    }
+
+    return (int16_t)ADERR;
 }
 
-uint8_t Scan_Touch(void)   /* 返回按下的通道下标 0~2，无键返回 0xFF */
+int16_t Touch_CVD_Read_Avg(uint8_t channel)
 {
-    const uint8_t ch_map[3] = {TOUCH_CH_RC4, TOUCH_CH_RC5, TOUCH_CH_RC6};
+    int32_t sum=0;
     uint8_t i;
-    for (i = 0; i < 3; i++)
+
+    for(i=0;i<CVD_AVG_COUNT;i++) sum+=Touch_CVD_Read(channel);
+    return (int16_t)(sum/(int32_t)CVD_AVG_COUNT);
+}
+
+void Touch_Calibrate(void)
+{
+    uint8_t i;
+    uint8_t n;
+
+    for(i=0;i<3u;i++)
     {
-        uint16_t v = Touch_Read_Avg(ch_map[i]);
-        int16_t delta = (int16_t)v - (int16_t)touch_base[i];
-        if (delta > THRESHOLD)         /* 负数说明采样电压下降，方向看你实测定正负 */
-            return i;
+        int32_t sum=0;
+        for(n=0;n<4u;n++) (void)Touch_CVD_Read(touch_channel[i]);
+        for(n=0;n<8u;n++) sum+=Touch_CVD_Read_Avg(touch_channel[i]);
+        touch_base[i]=(int16_t)(sum/8);
     }
-    return 0xFF;
+}
+
+uint16_t Touch_CalculateThreshold(void)
+{
+    uint16_t max_delta=0;
+    uint8_t i;
+
+    for(i=0;i<3u;i++)
+    {
+        uint16_t delta;
+        touch_pressed[i]=Touch_CVD_Read_Avg(touch_channel[i]);
+        delta=abs_diff_i16(touch_pressed[i],touch_base[i]);
+        if(delta>max_delta) max_delta=delta;
+    }
+
+    if(max_delta<4u) return 0u;
+    max_delta=(uint16_t)(max_delta/2u);
+    return (max_delta==0u)?1u:max_delta;
+}
+
+uint8_t Scan_Touch(void)
+{
+    uint8_t best=0xFFu;
+    uint16_t best_delta=0;
+    uint16_t press_threshold;
+    uint8_t i;
+
+    /* 标定阈值约为实际触摸变化量的一半；提高按下门限形成迟滞，
+       防止空闲漂移刚超过THRESHOLD后被持续误判成长按。 */
+    press_threshold=(THRESHOLD>43690u)?65535u:
+                    (uint16_t)(THRESHOLD+THRESHOLD/2u);
+
+    for(i=0;i<3u;i++)
+    {
+        int16_t value=Touch_CVD_Read_Avg(touch_channel[i]);
+        uint16_t delta=abs_diff_i16(value,touch_base[i]);
+
+        if(delta>press_threshold)
+        {
+            if(best==0xFFu || delta>best_delta)
+            {
+                best=i;
+                best_delta=delta;
+            }
+        }
+        else if(delta<(uint16_t)(THRESHOLD/4u+1u))
+        {
+            int32_t tracked=(int32_t)touch_base[i]*31+(int32_t)value;
+            touch_base[i]=(int16_t)(tracked/32);
+        }
+    }
+
+    return best;
 }

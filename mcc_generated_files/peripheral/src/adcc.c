@@ -26,12 +26,12 @@
 void ADCC_Initialize(void) {
     // ADON enabled; ADCONT disabled; ADCS FOSC; ADFM right; GO_nDONE stop; 
     ADCON0 = 0x84;
-    // ADPPOL VSS; ADIPEN disabled; ADGPOL digital_low; ADDSEN disabled; 
-    ADCON1 = 0x0;
+    // ADPPOL VSS; ADIPEN enabled; ADGPOL digital_low; ADDSEN enabled; 
+    ADCON1 = 0x41;
     // ADPSIS ADRES; ADCRS 0; ADACLR disabled; ADMD Basic_mode; 
     ADCON2 = 0x0;
-    // ADCALC First derivative of Single measurement; ADSOI ADGO not cleared; ADTMD enabled; 
-    ADCON3 = 0x7;
+    // ADCALC First derivative of Single measurement; ADSOI ADGO not cleared; ADTMD disabled; 
+    ADCON3 = 0x0;
     // ADACT disabled; 
     ADACT = 0x0;
     // ADACCH 0x0; 
@@ -50,10 +50,10 @@ void ADCC_Initialize(void) {
     ADREF = 0x0;
     // ADCAP Additional uC of 15pF; 
     ADCAP = 0xF;
-    // ADPRE 0x0; 
-    ADPRE = 0x0;
-    // ADACQ 0x0; 
-    ADACQ = 0x0;
+    // ADPRE 10; 
+    ADPRE = 0xA;
+    // ADACQ 10; 
+    ADACQ = 0xA;
     // CHS ANC0; 
     ADPCH = 0x10;
     // ADRPT 0x0; 
